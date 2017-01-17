@@ -19,6 +19,11 @@ extern "C" {
 #include "replayer/frame.h"
 #include "replayer/refcount.h"
 
+namespace TorchCraft {
+struct HandshakeServer;
+struct Frame;
+}
+
 namespace client {
 
 class State : public RefCounted {
@@ -55,7 +60,8 @@ class State : public RefCounted {
   ~State();
 
   void reset();
-  std::string update(lua_State* L, const std::string& upd);
+  std::vector<std::string> update(const TorchCraft::HandshakeServer* handshake);
+  std::vector<std::string> update(const TorchCraft::Frame* frame);
 
  private:
   void updateImage(const std::string& msg);

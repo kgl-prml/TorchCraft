@@ -9,6 +9,8 @@
 
 #include "state.h"
 
+#include "BWEnv/fbs/messages_generated.h"
+
 extern "C" {
 #include <TH/TH.h>
 #include <lauxlib.h>
@@ -124,73 +126,94 @@ void State::reset() {
   image_size[1] = 0;
 }
 
-std::string State::update(lua_State* L, const std::string& msg) {
-  // Detect optional image in reply from server
-  const char marker[] = "TCIMAGEDATA";
-  auto pos = msg.find(marker);
-  std::string update;
-  if (pos != std::string::npos) {
-    auto off = pos + sizeof(marker) - 1;
-    auto imageMsg = msg.substr(off, msg.length() - off - 2);
-    updateImage(imageMsg);
-    update = msg.substr(0, pos) + "}";
-  } else {
-    update = msg;
+std::vector<std::string> State::update(
+    const TorchCraft::HandshakeServer* handshake) {
+  std::vector<std::string> upd;
+  lag_frames = handshake->lag_frames();
+  upd.emplace_back("lag_frames");
+  if (flatbuffers::IsFieldPresent(
+          handshake, TorchCraft::HandshakeServer::VT_MAP_DATA)) {
+    map_data.assign(
+        handshake->map_data()->begin(), handshake->map_data()->end());
+    upd.emplace_back("map_data");
+  }
+  if (flatbuffers::IsFieldPresent(
+          handshake, TorchCraft::HandshakeServer::VT_MAP_SIZE)) {
+    map_data_size[0] = handshake->map_size()->x();
+    map_data_size[1] = handshake->map_size()->y();
+  }
+  if (flatbuffers::IsFieldPresent(
+          handshake, TorchCraft::HandshakeServer::VT_MAP_NAME)) {
+    map_name = handshake->map_name()->str();
+    upd.emplace_back("map_name");
+  }
+  // TODO: is_replay
+  player_id = handshake->player_id();
+  upd.emplace_back("player_id");
+  neutral_id = handshake->neutral_id();
+  upd.emplace_back("neutral_id");
+  battle_frame_count = handshake->battle_frame_count();
+  upd.emplace_back("battle_frame_count");
+  return upd;
+}
+
+std::vector<std::string> State::update(const TorchCraft::Frame* frame) {
+  std::vector<std::string> upd;
+
+  if (flatbuffers::IsFieldPresent(frame, TorchCraft::Frame::VT_DATA)) {
+    frame_string.assign(frame->data()->begin(), frame->data()->end());
+    std::istringstream ss(frame_string);
+    ss >> *this->frame;
+    upd.emplace_back("frame_string");
+    upd.emplace_back("frame");
   }
 
-  // Parse Lua state update
-  luaL_dostring(L, ("return " + update).c_str());
+  deaths.clear();
+  upd.emplace_back("deaths");
+  if (flatbuffers::IsFieldPresent(frame, TorchCraft::Frame::VT_DEATHS)) {
+    deaths.assign(frame->deaths()->begin(), frame->deaths()->end());
+  }
 
-  // Iterate over update and apply changes
-  lua_pushnil(L);
-  while (lua_next(L, -2) != 0) {
-    std::string key(lua_tostring(L, -2));
-    if (key == "frame") {
-      frame_string = luaL_checkstring(L, -1);
-      std::istringstream ss(frame_string);
-      ss >> *frame;
-    } else if (key == "lag_frames") {
-      lag_frames = luaL_checkint(L, -1);
-    } else if (key == "map_data") {
-      copyMapData(L, -1, map_data, map_data_size);
-    } else if (key == "map_name") {
-      map_name = luaL_checkstring(L, -1);
-    } else if (key == "is_replay") {
-      is_replay = lua_toboolean(L, -1);
-    } else if (key == "player_id") {
-      player_id = luaL_checkint(L, -1);
-    } else if (key == "neutral_id") {
-      neutral_id = luaL_checkint(L, -1);
-    } else if (key == "deaths") {
-      deaths.clear();
-      copyIntegerArray(L, -1, std::inserter(deaths, deaths.begin()));
-    } else if (key == "frame_from_bwapi") {
-      frame_from_bwapi = luaL_checkint(L, -1);
-    } else if (key == "battle_frame_count") {
-      battle_frame_count = luaL_checkint(L, -1);
-    } else if (key == "game_ended") {
-      game_ended = lua_toboolean(L, -1);
-    } else if (key == "game_won") {
-      game_won = lua_toboolean(L, -1);
-    } else if (key == "img_mode") {
-      img_mode = luaL_checkstring(L, -1);
-    } else if (key == "screen_position") {
-      copyIntegerArray(L, -1, screen_position, 2);
-    } else if (key == "visibility") {
-      visibility.clear();
-      copy2DIntegerArray(
-          L,
-          -1,
-          std::inserter(visibility, visibility.begin()),
-          visibility_size);
+  frame_from_bwapi = frame->frame_from_bwapi();
+  upd.emplace_back("frame_from_bwapi");
+  battle_frame_count = frame->battle_frame_count();
+  upd.emplace_back("battle_frame_count");
+
+  if (flatbuffers::IsFieldPresent(frame, TorchCraft::Frame::VT_IMG_MODE)) {
+    img_mode = frame->img_mode()->str();
+    upd.emplace_back("img_mode");
+  }
+  if (flatbuffers::IsFieldPresent(
+          frame, TorchCraft::Frame::VT_SCREEN_POSITION)) {
+    screen_position[0] = frame->screen_position()->x();
+    screen_position[1] = frame->screen_position()->y();
+    upd.emplace_back("screen_position");
+  }
+  if (flatbuffers::IsFieldPresent(frame, TorchCraft::Frame::VT_VISIBILITY) &&
+      flatbuffers::IsFieldPresent(
+          frame, TorchCraft::Frame::VT_VISIBILITY_SIZE)) {
+    if (frame->visibility()->size() ==
+        frame->visibility_size()->x() * frame->visibility_size()->y()) {
+      visibility_size[0] = frame->visibility_size()->x();
+      visibility_size[1] = frame->visibility_size()->y();
+      visibility.assign(
+          frame->visibility()->begin(), frame->visibility()->end());
+      upd.emplace_back("visibility");
     } else {
-      std::cerr << "!! unknown key: " << key << std::endl;
+      visibility_size[0] = 0;
+      visibility_size[1] = 0;
+      visibility.clear();
+      std::cerr << "Warning: visibility data does not match visibility size"
+                << std::endl;
     }
-
-    lua_pop(L, 1);
+  }
+  if (flatbuffers::IsFieldPresent(frame, TorchCraft::Frame::VT_IMG_DATA)) {
+    updateImage(
+        std::string(frame->img_data()->begin(), frame->img_data()->end()));
+    upd.emplace_back("image");
   }
 
-  return update;
+  return upd;
 }
 
 void State::updateImage(const std::string& msg) {
