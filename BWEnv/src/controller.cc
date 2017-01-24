@@ -36,6 +36,10 @@ Controller::Controller(bool is_client) {
   std::cout << *config_ << std::endl;
 
   this->zmq_server = std::make_unique<ZMQ_server>(this, config_->port);
+
+  tcframe_.screen_position = std::make_unique<TorchCraft::Vec2>();
+  tcframe_.visibility_size = std::make_unique<TorchCraft::Vec2>();
+  tcframe_.img_size = std::make_unique<TorchCraft::Vec2>();
 }
 
 Controller::~Controller()

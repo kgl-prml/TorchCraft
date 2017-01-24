@@ -83,7 +83,7 @@ void ZMQ_server::connect()
 
   this->server_sock_connected = true;
 
-  uint8_t* data = nullptr;
+  uint8_t* data;
   size_t size;
   if (zsock_recv(this->server_sock, "b", &data, &size) != 0) {
     throw exception("ZMQ_server::receiveMessage(): zmq_recv failed.");
@@ -177,7 +177,7 @@ void ZMQ_server::receiveMessage()
 
   flatbuffers::Verifier verifier(data, size);
   if (!TorchCraft::VerifyMessageBuffer(verifier)) {
-	free(data);
+    free(data);
     throw exception("ZMQ_server::receiveMessage(): invalid message.");
   }
 
