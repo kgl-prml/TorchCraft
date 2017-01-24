@@ -60,7 +60,7 @@ class State : public RefCounted {
   std::vector<std::string> update(const TorchCraft::Frame* frame);
 
  private:
-  void updateImage(const std::string& msg);
+  bool setRawImage(const TorchCraft::Frame* frame);
 };
 
 } // namespace client

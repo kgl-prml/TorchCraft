@@ -122,38 +122,42 @@ std::vector<std::string> State::update(const TorchCraft::Frame* frame) {
                 << std::endl;
     }
   }
-  if (flatbuffers::IsFieldPresent(frame, TorchCraft::Frame::VT_IMG_DATA)) {
-    updateImage(
-        std::string(frame->img_data()->begin(), frame->img_data()->end()));
-    upd.emplace_back("image");
+  if (flatbuffers::IsFieldPresent(frame, TorchCraft::Frame::VT_IMG_DATA) &&
+      flatbuffers::IsFieldPresent(frame, TorchCraft::Frame::VT_IMG_SIZE)) {
+    if (setRawImage(frame)) {
+      upd.emplace_back("image");
+    }
   }
 
   return upd;
 }
 
-void State::updateImage(const std::string& msg) {
-  std::istringstream ss(msg);
-  std::string t;
-  std::getline(ss, t, ',');
-  auto width = std::stoi(t);
-  std::getline(ss, t, ',');
-  auto height = std::stoi(t);
-  auto imgdata = msg.c_str() + ss.tellg();
+bool State::setRawImage(const TorchCraft::Frame* frame) {
+  if (frame->img_data()->size() !=
+      frame->img_size()->x() * frame->img_size()->y() * 4) {
+    image_size[0] = 0;
+    image_size[1] = 0;
+    image.clear();
+    std::cerr << "Warning: image data does not match image size" << std::endl;
+    return false;
+  }
 
-  image.resize(3 * height * width);
-  auto imgIt = image.begin();
+  image_size[0] = frame->img_size()->x();
+  image_size[1] = frame->img_size()->y();
 
   // Incoming binary data is [BGRA,...], which we transform into [R..,G..,B..].
+  image.resize(image_size[0] * image_size[1] * 3);
+  auto dst = image.begin();
+  auto srcBegin = frame->img_data()->begin();
   for (int a = 2; a >= 0; --a) {
-    int it = a;
-    for (int i = 0; i < height * width; i++) {
-      *imgIt++ = imgdata[it];
-      it += 4;
+    auto src = srcBegin + a;
+    for (int i = 0; i < image_size[0] * image_size[1]; i++) {
+      *dst++ = *src;
+      src += 4;
     }
   }
 
-  image_size[0] = width;
-  image_size[1] = height;
+  return true;
 }
 
 } // namespace client
