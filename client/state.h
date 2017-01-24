@@ -12,10 +12,6 @@
 #include <string>
 #include <vector>
 
-extern "C" {
-#include <lua.h>
-}
-
 #include "replayer/frame.h"
 #include "replayer/refcount.h"
 
