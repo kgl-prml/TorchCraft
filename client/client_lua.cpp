@@ -42,6 +42,16 @@ client::Client::Command parseCommand(const std::string& str) {
   return comm;
 }
 
+std::vector<client::Client::Command> parseCommandString(
+    const std::string& str) {
+  std::vector<client::Client::Command> comms;
+  std::istringstream ss(str);
+  for (std::string part; std::getline(ss, part, ':');) {
+    comms.emplace_back(parseCommand(part));
+  }
+  return comms;
+}
+
 } // namespace
 
 int newClient(lua_State* L) {
@@ -181,16 +191,13 @@ int sendClient(lua_State* L) {
     int index = 1;
     bool first = true;
     while (lua_next(L, -2) != 0) {
-      comms.emplace_back(parseCommand(luaL_checkstring(L, -1)));
+      auto cs = parseCommandString(luaL_checkstring(L, -1));
+      std::move(cs.begin(), cs.end(), std::back_inserter(comms));
       lua_pop(L, 1);
     }
     lua_pop(L, 1);
   } else {
-    // Compatibility: split string at ':' into individual commands
-    std::istringstream ss(luaL_checkstring(L, 2));
-    for (std::string part; std::getline(ss, part, ':');) {
-      comms.emplace_back(parseCommand(part));
-    }
+    comms = std::move(parseCommandString(luaL_checkstring(L, 2)));
   }
 
   if (!cl->send(comms)) {
