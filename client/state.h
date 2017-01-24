@@ -18,6 +18,7 @@
 namespace TorchCraft {
 struct HandshakeServer;
 struct Frame;
+struct EndGame;
 }
 
 namespace client {
@@ -58,6 +59,7 @@ class State : public RefCounted {
   void reset();
   std::vector<std::string> update(const TorchCraft::HandshakeServer* handshake);
   std::vector<std::string> update(const TorchCraft::Frame* frame);
+  std::vector<std::string> update(const TorchCraft::EndGame* end);
 
  private:
   bool setRawImage(const TorchCraft::Frame* frame);

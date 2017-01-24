@@ -198,19 +198,32 @@ bool Client::receive(std::vector<std::string>& updates) {
     error_ = "Error parsing reply";
     return false;
   }
-  auto msg = TorchCraft::GetMessage(reply.data());
-  if (msg->msg_type() != TorchCraft::Any::Frame) {
-    error_ = std::string("Error parsing reply: expected Frame, got ") +
-        TorchCraft::EnumNameAny(msg->msg_type());
-    return false;
-  }
-  if (!TorchCraft::VerifyAny(verifier, msg->msg(), TorchCraft::Any::Frame)) {
-    error_ = "Error parsing reply";
-    return false;
-  }
 
-  updates =
-      state_->update(reinterpret_cast<const TorchCraft::Frame*>(msg->msg()));
+  auto msg = TorchCraft::GetMessage(reply.data());
+  switch (msg->msg_type()) {
+    case TorchCraft::Any::Frame:
+      if (!TorchCraft::VerifyAny(
+              verifier, msg->msg(), TorchCraft::Any::Frame)) {
+        error_ = "Error parsing reply";
+        return false;
+      }
+      updates = state_->update(
+          reinterpret_cast<const TorchCraft::Frame*>(msg->msg()));
+      break;
+    case TorchCraft::Any::EndGame:
+      if (!TorchCraft::VerifyAny(
+              verifier, msg->msg(), TorchCraft::Any::EndGame)) {
+        error_ = "Error parsing reply";
+        return false;
+      }
+      updates = state_->update(
+          reinterpret_cast<const TorchCraft::EndGame*>(msg->msg()));
+      break;
+    default:
+      error_ = std::string("Error parsing reply: cannot handle message: ") +
+          TorchCraft::EnumNameAny(msg->msg_type());
+      return false;
+  }
   return true;
 }
 

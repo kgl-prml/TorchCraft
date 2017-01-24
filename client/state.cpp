@@ -98,12 +98,14 @@ std::vector<std::string> State::update(const TorchCraft::Frame* frame) {
     img_mode = frame->img_mode()->str();
     upd.emplace_back("img_mode");
   }
+
   if (flatbuffers::IsFieldPresent(
           frame, TorchCraft::Frame::VT_SCREEN_POSITION)) {
     screen_position[0] = frame->screen_position()->x();
     screen_position[1] = frame->screen_position()->y();
     upd.emplace_back("screen_position");
   }
+
   if (flatbuffers::IsFieldPresent(frame, TorchCraft::Frame::VT_VISIBILITY) &&
       flatbuffers::IsFieldPresent(
           frame, TorchCraft::Frame::VT_VISIBILITY_SIZE)) {
@@ -122,12 +124,32 @@ std::vector<std::string> State::update(const TorchCraft::Frame* frame) {
                 << std::endl;
     }
   }
+
   if (flatbuffers::IsFieldPresent(frame, TorchCraft::Frame::VT_IMG_DATA) &&
       flatbuffers::IsFieldPresent(frame, TorchCraft::Frame::VT_IMG_SIZE)) {
     if (setRawImage(frame)) {
       upd.emplace_back("image");
     }
   }
+
+  return upd;
+}
+
+std::vector<std::string> State::update(const TorchCraft::EndGame* end) {
+  std::vector<std::string> upd;
+
+  if (flatbuffers::IsFieldPresent(end, TorchCraft::EndGame::VT_FRAME)) {
+    frame_string.assign(end->frame()->begin(), end->frame()->end());
+    std::istringstream ss(frame_string);
+    ss >> *frame;
+    upd.emplace_back("frame_string");
+    upd.emplace_back("frame");
+  }
+
+  game_ended = true;
+  upd.emplace_back("game_ended");
+  game_won = end->game_won();
+  upd.emplace_back("game_won");
 
   return upd;
 }
