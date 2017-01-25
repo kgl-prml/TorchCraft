@@ -83,25 +83,26 @@ void ZMQ_server::connect()
 
   this->server_sock_connected = true;
 
-  uint8_t* data;
-  size_t size;
-  if (zsock_recv(this->server_sock, "b", &data, &size) != 0) {
+  zchunk_t *chunk;
+  if (zsock_recv(this->server_sock, "c", &chunk) != 0) {
     throw exception("ZMQ_server::receiveMessage(): zmq_recv failed.");
   }
 
-  if (size == 0) {
+  if (zchunk_size(chunk) == 0) {
     // Retry
     TorchCraft::ErrorT err;
     sendError(&err);
-    free(data);
-    if (zsock_recv(this->server_sock, "b", &data, &size) != 0) {
+    zchunk_destroy(&chunk);
+    if (zsock_recv(this->server_sock, "c", &chunk) != 0) {
       throw exception("ZMQ_server::connect(): zsock_recv failed.");
     }
   }
 
+  uint8_t* data = zchunk_data(chunk);
+  size_t size = zchunk_size(chunk);
   flatbuffers::Verifier verifier(data, size);
   if (!TorchCraft::VerifyMessageBuffer(verifier)) {
-    free(data);
+    zchunk_destroy(&chunk);
     throw exception("ZMQ_server::receiveMessage(): invalid message.");
   }
 
@@ -109,19 +110,19 @@ void ZMQ_server::connect()
   if (msg->msg_type() == TorchCraft::Any::HandshakeClient) {
     if (!TorchCraft::VerifyAny(
             verifier, msg->msg(), TorchCraft::Any::HandshakeClient)) {
-      free(data);
+      zchunk_destroy(&chunk);
       throw runtime_error("ZMQ_server::receiveMessage(): invalid message.");
     }
     handleReconnect(
         reinterpret_cast<const TorchCraft::HandshakeClient*>(msg->msg()));
   } else {
-    free(data);
+    zchunk_destroy(&chunk);
     throw logic_error(
         string("ZMQ_server::receiveMessage(): cannot handle message: ") +
         TorchCraft::EnumNameAny(msg->msg_type()));
   }
 
-  free(data);
+  zchunk_destroy(&chunk);
 }
 
 ZMQ_server::~ZMQ_server()
@@ -169,43 +170,41 @@ void ZMQ_server::receiveMessage()
   /* if not yet connected, do nothing */
   if (!this->server_sock_connected) return;
 
-  uint8_t *data;
-  size_t size;
-  if (zsock_recv(this->server_sock, "b", &data, &size) != 0) {
+  zchunk_t *chunk;
+  if (zsock_recv(this->server_sock, "c", &chunk) != 0) {
     throw runtime_error("ZMQ_server::receiveMessage(): zmq_recv failed.");
   }
 
+  uint8_t *data = zchunk_data(chunk);
+  size_t size = zchunk_size(chunk);
   flatbuffers::Verifier verifier(data, size);
   if (!TorchCraft::VerifyMessageBuffer(verifier)) {
-    free(data);
+    zchunk_destroy(&chunk);
     throw exception("ZMQ_server::receiveMessage(): invalid message.");
   }
 
   auto msg = TorchCraft::GetMessage(data);
+  if (!TorchCraft::VerifyAny(verifier, msg->msg(), msg->msg_type())) {
+    zchunk_destroy(&chunk);
+    throw runtime_error("ZMQ_server::receiveMessage(): invalid message.");
+  }
+
   switch (msg->msg_type()) {
     case TorchCraft::Any::HandshakeClient: // reconnection
-      if (!TorchCraft::VerifyAny(verifier, msg->msg(), TorchCraft::Any::HandshakeClient)) {
-		free(data);
-        throw runtime_error("ZMQ_server::receiveMessage(): invalid message.");
-      }
       handleReconnect(
           reinterpret_cast<const TorchCraft::HandshakeClient*>(msg->msg()));
       break;
     case TorchCraft::Any::Commands:
-      if (!TorchCraft::VerifyAny(verifier, msg->msg(), TorchCraft::Any::Commands)) {
-        free(data);
-        throw runtime_error("ZMQ_server::receiveMessage(): invalid message.");
-      }
       handleCommands(reinterpret_cast<const TorchCraft::Commands*>(msg->msg()));
       break;
     default:
-      free(data);
-	  throw runtime_error(
+      zchunk_destroy(&chunk);
+      throw runtime_error(
           string("ZMQ_server::receiveMessage(): cannot handle message: ") +
           TorchCraft::EnumNameAny(msg->msg_type()));
   }
 
-  free(data);
+  zchunk_destroy(&chunk);
 }
 
 void ZMQ_server::handleReconnect(const TorchCraft::HandshakeClient* handshake) {
