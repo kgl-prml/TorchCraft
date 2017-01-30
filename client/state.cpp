@@ -43,6 +43,8 @@ void State::reset() {
 
 std::vector<std::string> State::update(
     const TorchCraft::HandshakeServer* handshake) {
+  reset();
+
   std::vector<std::string> upd;
   lag_frames = handshake->lag_frames();
   upd.emplace_back("lag_frames");

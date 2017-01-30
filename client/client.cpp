@@ -198,26 +198,41 @@ bool Client::receive(std::vector<std::string>& updates) {
     error_ = "Error parsing reply";
     return false;
   }
-
   auto msg = TorchCraft::GetMessage(reply.data());
+  if (!TorchCraft::VerifyAny(verifier, msg->msg(), msg->msg_type())) {
+    error_ = "Error parsing reply";
+    return false;
+  }
+
   switch (msg->msg_type()) {
     case TorchCraft::Any::Frame:
-      if (!TorchCraft::VerifyAny(
-              verifier, msg->msg(), TorchCraft::Any::Frame)) {
-        error_ = "Error parsing reply";
-        return false;
-      }
       updates = state_->update(
           reinterpret_cast<const TorchCraft::Frame*>(msg->msg()));
       break;
     case TorchCraft::Any::EndGame:
-      if (!TorchCraft::VerifyAny(
-              verifier, msg->msg(), TorchCraft::Any::EndGame)) {
-        error_ = "Error parsing reply";
-        return false;
-      }
       updates = state_->update(
           reinterpret_cast<const TorchCraft::EndGame*>(msg->msg()));
+      break;
+    case TorchCraft::Any::HandshakeServer:
+      updates = state_->update(
+          reinterpret_cast<const TorchCraft::HandshakeServer*>(msg->msg()));
+      break;
+    // TODO These message types were not explicitly handled in the Lua version
+    case TorchCraft::Any::PlayerLeft:
+      std::cerr << "[Warning] Unhandled message from server: "
+                << TorchCraft::EnumNameAny(msg->msg_type()) << "(player_left=\""
+                << reinterpret_cast<const TorchCraft::PlayerLeft*>(msg->msg())
+                       ->player_left()
+                       ->str()
+                << "\")" << std::endl;
+      break;
+    case TorchCraft::Any::Error:
+      std::cerr << "[Warning] Unhandled message from server: "
+                << TorchCraft::EnumNameAny(msg->msg_type()) << "(message=\""
+                << reinterpret_cast<const TorchCraft::Error*>(msg->msg())
+                       ->message()
+                       ->str()
+                << "\"" << std::endl;
       break;
     default:
       error_ = std::string("Error parsing reply: cannot handle message: ") +
