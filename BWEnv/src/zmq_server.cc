@@ -85,7 +85,7 @@ void ZMQ_server::connect()
 
   zchunk_t *chunk;
   if (zsock_recv(this->server_sock, "c", &chunk) != 0) {
-    throw exception("ZMQ_server::receiveMessage(): zmq_recv failed.");
+    throw exception("ZMQ_server::connect(): zmq_recv failed.");
   }
 
   if (zchunk_size(chunk) == 0) {
@@ -103,7 +103,7 @@ void ZMQ_server::connect()
   flatbuffers::Verifier verifier(data, size);
   if (!TorchCraft::VerifyMessageBuffer(verifier)) {
     zchunk_destroy(&chunk);
-    throw exception("ZMQ_server::receiveMessage(): invalid message.");
+    throw exception("ZMQ_server::connect(): invalid message.");
   }
 
   auto msg = TorchCraft::GetMessage(data);
@@ -111,14 +111,14 @@ void ZMQ_server::connect()
     if (!TorchCraft::VerifyAny(
             verifier, msg->msg(), TorchCraft::Any::HandshakeClient)) {
       zchunk_destroy(&chunk);
-      throw runtime_error("ZMQ_server::receiveMessage(): invalid message.");
+      throw runtime_error("ZMQ_server::connect(): invalid message.");
     }
     handleReconnect(
         reinterpret_cast<const TorchCraft::HandshakeClient*>(msg->msg()));
   } else {
     zchunk_destroy(&chunk);
     throw logic_error(
-        string("ZMQ_server::receiveMessage(): cannot handle message: ") +
+        string("ZMQ_server::connect(): cannot handle message: ") +
         TorchCraft::EnumNameAny(msg->msg_type()));
   }
 
